@@ -70,4 +70,16 @@ def get_python_lib():
     return torch.library.Library("xformers_python", "DEF")
 
 
+# On AMD ROCm + gfx9-class GPUs, install an aiter.flash_attn_func-backed
+# dispatch for torch.nn.functional.scaled_dot_product_attention so the amdpilot
+# attention benchmark (which calls SDPA directly on BF16 GQA tensors) benefits
+# from the gfx950-tuned aiter flash-attention kernel. Wrapped in try/except so
+# any import error leaves the package importable.
+try:
+    from .ops.fmha.amd_mxfp4 import _install_amd_rocm_sdpa_dispatch
+    _install_amd_rocm_sdpa_dispatch()
+except Exception:
+    logger.debug("AMD ROCm SDPA dispatch was not installed", exc_info=True)
+
+
 # end of file
