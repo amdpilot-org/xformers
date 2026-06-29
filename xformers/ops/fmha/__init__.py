@@ -103,3 +103,14 @@ if importlib.util.find_spec("mslk"):
         "CUDA",
         _memory_efficient_attention_forward_torch_wrapper_with_bias,
     )
+
+# AMD gfx950 (MI355X) MX-FP4 K/V cache forward attention op. Self-contained:
+# importable without the optional ``mslk`` dispatch package, and auto-registered
+# into the forward dispatch list when ``mslk`` is present (see
+# ``amd_mxfp4._register_into_dispatch``).
+from . import amd_mxfp4  # noqa: E402, F401
+from .amd_mxfp4 import (  # noqa: E402, F401
+    OpAmdMxfp4Fwd,
+    mxfp4_dequant_kv,
+    mxfp4_kv_attention,
+)
