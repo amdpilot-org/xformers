@@ -103,3 +103,50 @@ if importlib.util.find_spec("mslk"):
         "CUDA",
         _memory_efficient_attention_forward_torch_wrapper_with_bias,
     )
+elif hasattr(torch.version, "hip") and torch.version.hip is not None:
+    # ROCm fallback: when the mslk package is unavailable, dispatch
+    # memory_efficient_attention to aiter's flash attention kernel
+    # (AMD-native, GQA-native) instead of falling through to PyTorch
+    # SDPA, which does not support the MX-FP4 K/V cache path on gfx950.
+    _AITER_AVAILABLE = importlib.util.find_spec("aiter") is not None
+
+    class AttentionBias:  # noqa: E701
+        """Minimal AttentionBias base for the ROCm/aiter fallback path."""
+
+    class LowerTriangularMask(AttentionBias):  # noqa: E701
+        """Causal (lower-triangular) attention mask."""
+
+    class AttentionOpBase:  # noqa: E701
+        """Minimal op base for API compatibility."""
+
+    class AttentionOp:  # noqa: E701
+        def __init__(self, fw, bw):
+            self.op = fw
+            self.op_bw = bw
+
+    def memory_efficient_attention(
+        query, key, value, attn_bias=None, p=0.0, scale=None, op=None
+    ):
+        if not _AITER_AVAILABLE:
+            raise RuntimeError(
+                "memory_efficient_attention on ROCm requires either the mslk "
+                "package or aiter; neither is available."
+            )
+        import aiter.ops.mha as _aiter_mha
+
+        # xformers convention: [B, H, S, D] (BHSD)
+        # aiter flash_attn_func convention: [B, S, H, D] (BSHD)
+        causal = isinstance(attn_bias, LowerTriangularMask)
+        q = query.transpose(1, 2).contiguous()
+        k = key.transpose(1, 2).contiguous()
+        v = value.transpose(1, 2).contiguous()
+        if scale is None:
+            scale = 1.0 / (q.shape[-1] ** 0.5)
+        out = _aiter_mha.flash_attn_func(
+            q, k, v, softmax_scale=scale, causal=causal
+        )
+        # BSHD -> BHSD
+        return out.transpose(1, 2).contiguous()
+
+    def memory_efficient_attention_forward(q, k, v, attn_bias=None, scale=None):
+        return memory_efficient_attention(q, k, v, attn_bias=attn_bias, scale=scale)

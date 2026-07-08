@@ -25,6 +25,17 @@ if _HAS_MSLK := importlib.util.find_spec("mslk") is not None:
         MemoryEfficientAttentionFlashAttentionOp,
         MemoryEfficientAttentionSplitKCkOp,
     )
+elif hasattr(torch.version, "hip") and torch.version.hip is not None:
+    # ROCm fallback (mslk unavailable): export the aiter-backed path
+    from .fmha import (
+        AttentionBias,
+        AttentionBias as AttentionMask,
+        AttentionOp,
+        AttentionOpBase,
+        LowerTriangularMask,
+        memory_efficient_attention,
+        memory_efficient_attention_forward,
+    )
 from .indexing import index_select_cat, scaled_index_add
 from .modpar_layers import ColumnParallelLinear, RowParallelLinear
 from .rmsnorm import RMSNorm
