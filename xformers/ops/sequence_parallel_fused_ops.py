@@ -11,6 +11,11 @@ import torch.distributed as dist
 import torch.multiprocessing.reductions
 from torch.distributed._symmetric_memory import get_symm_mem_workspace
 
+# GroupName was removed/renamed in newer PyTorch builds; alias it so the
+# type annotations below resolve on builds that lack it.
+if not hasattr(dist.distributed_c10d, "GroupName"):
+    dist.distributed_c10d.GroupName = str  # type: ignore[attr-defined]
+
 OP_FINISHED_CHANNEL = 0
 COMMS_READY_CHANNEL = 1
 

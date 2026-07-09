@@ -7,7 +7,11 @@
 from typing import Callable, List, Tuple
 
 import torch
-from torch.distributed.distributed_c10d import _resolve_process_group, GroupName
+from torch.distributed.distributed_c10d import _resolve_process_group
+try:  # GroupName was removed/renamed in newer PyTorch builds
+    from torch.distributed.distributed_c10d import GroupName
+except ImportError:  # pragma: no cover - depends on torch version
+    GroupName = str  # type: ignore[assignment,misc]
 
 from .differentiable_collectives import (
     gather_along_first_dim,
