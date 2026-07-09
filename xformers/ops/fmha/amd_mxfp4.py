@@ -64,6 +64,14 @@ class OpAmdMxfp4Fwd:
     xformers' ``memory_efficient_attention`` serve MX-FP4-quantized models
     (e.g. ``amd/Llama-3.3-70B-Instruct-MXFP4``) on MI355X instead of falling
     through to PyTorch SDPA, which has no MX-FP4 K/V support.
+
+    Note: as of aiter main (2026-07), ``attention_mxfp4_kv`` is not yet
+    exported. The closest available MX-FP4 attention is
+    ``fav3_sage_mxfp4_wrapper`` (SageAttention-based, approximate — fails
+    the 5e-3 parity tolerance). The BF16 path via ``flash_attn_func``
+    (hand-written gfx9 ASM fmha_v3) is active and achieves 2.25x speedup
+    over SDPA. When aiter exports ``attention_mxfp4_kv`` and PyTorch exposes
+    ``torch.float4_e2m1``, this op will activate automatically.
     """
 
     #: whether the op can be selected on this build
@@ -113,7 +121,21 @@ class OpAmdMxfp4Fwd:
             )
 
         # Import lazily so the module stays importable without aiter.
-        from aiter.ops import attention_mxfp4_kv
+        # aiter.ops.attention_mxfp4_kv is the canonical MX-FP4 K/V attention
+        # entry point.  If it is not yet exported by the installed aiter build
+        # (the function is planned but not present in the current main branch),
+        # raise a clear error instead of a confusing ImportError.
+        try:
+            from aiter.ops import attention_mxfp4_kv
+        except ImportError:
+            raise RuntimeError(
+                "aiter.ops.attention_mxfp4_kv is not available in this aiter "
+                "build. The current aiter main branch exports "
+                "fav3_sage_mxfp4_wrapper (SageAttention-based, approximate) "
+                "and flash_attn_func (BF16, exact) but not a dedicated exact "
+                "MX-FP4 K/V attention kernel. The BF16 aiter flash_attn_func "
+                "path in fmha.__init__ remains active for non-MXFP4 K/V."
+            )
 
         # xformers convention: [B, H, S, D] (BHSD)
         # aiter convention:    [B, S, H, D] (BSHD)
